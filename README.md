@@ -2,6 +2,20 @@
 
 A small Express API that fetches live crypto prices from Binance for one or many requested symbols.
 
+## Production URL
+
+```text
+https://cryptopricefetch.vercel.app
+```
+
+Use this as the base URL in frontend code.
+
+For local development only:
+
+```text
+http://localhost:3000
+```
+
 ## Start the server
 
 ```bash
@@ -9,34 +23,35 @@ npm install
 npm start
 ```
 
-The app runs on:
-
-```text
-http://localhost:3000
-```
-
 ## Endpoints
 
 ### Health check
 
 ```bash
-curl http://localhost:3000/health
+curl "https://cryptopricefetch.vercel.app/health"
 ```
 
 ### Single coin price
 
 ```bash
-curl "http://localhost:3000/api/price?symbol=btc"
-curl "http://localhost:3000/api/price?symbol=BTCUSDT"
-curl "http://localhost:3000/api/price?symbol=eth&quote=USDT"
+curl "https://cryptopricefetch.vercel.app/api/price?symbol=btc"
+curl "https://cryptopricefetch.vercel.app/api/price?symbol=BTCUSDT"
+curl "https://cryptopricefetch.vercel.app/api/price?symbol=eth&quote=USDT"
 ```
 
 ### Multiple coin prices
 
 ```bash
-curl "http://localhost:3000/api/prices?symbols=btc,eth,sol"
-curl "http://localhost:3000/api/prices?symbols=BTCUSDT,ETHUSDT,SOLUSDT"
-curl "http://localhost:3000/api/prices?symbols=btc,eth&quote=USDT"
+curl "https://cryptopricefetch.vercel.app/api/prices?symbols=btc,eth,sol"
+curl "https://cryptopricefetch.vercel.app/api/prices?symbols=BTCUSDT,ETHUSDT,SOLUSDT"
+curl "https://cryptopricefetch.vercel.app/api/prices?symbols=btc,eth&quote=USDT"
+```
+
+### Local dev examples
+
+```bash
+curl "http://localhost:3000/health"
+curl "http://localhost:3000/api/price?symbol=btc"
 ```
 
 ## Example response

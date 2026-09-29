@@ -6,7 +6,7 @@ const { Redis } = require('@upstash/redis');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const BINANCE_PRICE_API = 'https://api.binance.com/api/v3/ticker/price';
+const COINBASE_PRICE_API = 'https://api.coinbase.com/v2/prices';
 const CACHE_TTL_MS = (() => {
   const rawValue = Number(process.env.CACHE_TTL_MS);
   return Number.isFinite(rawValue) && rawValue > 0 ? rawValue : 15000;
@@ -57,19 +57,21 @@ async function setCachedPrice(symbol, quote, price) {
   });
 }
 
-async function fetchBinancePrice(symbol) {
-  const response = await axios.get(BINANCE_PRICE_API, {
-    params: { symbol },
+async function fetchCoinbasePrice(symbol) {
+  const response = await axios.get(`${COINBASE_PRICE_API}/${symbol}/spot`, {
     timeout: 5000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+    },
   });
 
-  return response.data.price;
+  return response.data.data.amount;
 }
 
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    service: 'binance-crypto-price-fetcher',
+    service: 'coinbase-crypto-price-fetcher',
     uptime: process.uptime(),
     cacheTtlMs: CACHE_TTL_MS,
     port: PORT,
@@ -80,15 +82,30 @@ app.get('/health', (req, res) => {
 function normalizeSymbols(rawSymbols, quote) {
   if (!rawSymbols) return [];
 
+  const normalizedQuote = quote === 'USDT' ? 'USD' : String(quote).toUpperCase();
   const list = Array.isArray(rawSymbols) ? rawSymbols : String(rawSymbols).split(',');
 
   return list
     .map((value) => value.trim().toUpperCase())
     .filter(Boolean)
     .map((value) => {
-      const cleaned = value.replace(/[^A-Z0-9]/g, '');
+      const cleaned = value.replace(/[^A-Z0-9-]/g, '');
       if (!cleaned) return null;
-      return cleaned.endsWith(quote) ? cleaned : `${cleaned}${quote}`;
+
+      if (cleaned.includes('-')) {
+        const [base, pairQuote] = cleaned.split('-');
+        if (!base || !pairQuote) return null;
+        return `${base}-${pairQuote === 'USDT' ? 'USD' : pairQuote}`;
+      }
+
+      const compact = cleaned.replace(/-/g, '');
+      if (compact.endsWith('USDT') || compact.endsWith('USD')) {
+        const suffix = compact.endsWith('USDT') ? 'USDT' : 'USD';
+        const base = compact.slice(0, -suffix.length);
+        return `${base}-${normalizedQuote}`;
+      }
+
+      return `${compact}-${normalizedQuote}`;
     })
     .filter(Boolean);
 }
@@ -121,23 +138,23 @@ app.get('/api/price', async (req, res) => {
         success: true,
         symbol,
         price: cachedPrice,
-        source: 'binance',
+        source: 'coinbase',
         cached: true,
       });
     }
 
-    const price = await fetchBinancePrice(symbol);
+    const price = await fetchCoinbasePrice(symbol);
     await setCachedPrice(symbol, quote, price);
 
     return res.json({
       success: true,
       symbol,
       price,
-      source: 'binance',
+      source: 'coinbase',
       cached: false,
     });
   } catch (error) {
-    const message = error.response?.data?.msg || error.message || 'Failed to fetch Binance price';
+    const message = error.response?.data?.errors?.[0]?.message || error.response?.data?.message || error.message || 'Failed to fetch Coinbase price';
     const statusCode = error.response?.status || 502;
 
     return res.status(statusCode).json({
@@ -185,7 +202,7 @@ app.get('/api/prices', async (req, res) => {
         prices.push({
           symbol,
           price: cachedPrice,
-          source: 'binance',
+          source: 'coinbase',
           cached: true,
         });
       } else {
@@ -195,13 +212,13 @@ app.get('/api/prices', async (req, res) => {
 
     if (missingSymbols.length) {
       const priceRequests = missingSymbols.map(async (symbol) => {
-        const price = await fetchBinancePrice(symbol);
+        const price = await fetchCoinbasePrice(symbol);
         await setCachedPrice(symbol, quote, price);
 
         return {
           symbol,
           price,
-          source: 'binance',
+          source: 'coinbase',
           cached: false,
         };
       });
@@ -230,7 +247,7 @@ app.get('/api/prices', async (req, res) => {
         success: false,
         quote,
         requestedSymbols: symbols,
-        error: 'Failed to fetch any Binance prices.',
+        error: 'Failed to fetch any Coinbase prices.',
         errors,
       });
     }
@@ -243,7 +260,7 @@ app.get('/api/prices', async (req, res) => {
       errors: errors.length ? errors : undefined,
     });
   } catch (error) {
-    const message = error.response?.data?.msg || error.message || 'Failed to fetch multiple Binance prices';
+    const message = error.response?.data?.errors?.[0]?.message || error.response?.data?.message || error.message || 'Failed to fetch multiple Coinbase prices';
     const statusCode = error.response?.status || 502;
 
     return res.status(statusCode).json({
