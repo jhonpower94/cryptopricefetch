@@ -7,6 +7,18 @@ const { Redis } = require('@upstash/redis');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const COINBASE_PRICE_API = 'https://api.coinbase.com/v2/prices';
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
 const CACHE_TTL_MS = (() => {
   const rawValue = Number(process.env.CACHE_TTL_MS);
   return Number.isFinite(rawValue) && rawValue > 0 ? rawValue : 15000;
